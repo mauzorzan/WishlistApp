@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "My Wishlist App",
+  title: "Snebby's Wishlist App",
   description: "A beautiful wishlist app to save all the things you want",
 };
 
