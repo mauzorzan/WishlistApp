@@ -11,7 +11,7 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const item = getById(parseInt(id));
+    const item = await getById(parseInt(id));
     
     if (!item) {
       return NextResponse.json(
@@ -42,7 +42,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const updatedItem = update(parseInt(id), {
+    const updatedItem = await update(parseInt(id), {
       link: body.link,
       notes: body.notes,
     });
@@ -67,7 +67,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const success = remove(parseInt(id));
+    const success = await remove(parseInt(id));
 
     if (!success) {
       return NextResponse.json(

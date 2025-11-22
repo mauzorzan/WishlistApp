@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const items = getAll();
+    const items = await getAll();
     return NextResponse.json(items);
   } catch (error) {
     console.error('Error fetching wishlist items:', error);
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const newItem = create({
+    const newItem = await create({
       link: body.link,
       notes: body.notes || '',
     });

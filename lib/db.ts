@@ -1,27 +1,4 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
-
-const dbDir = path.join(process.cwd(), 'data');
-const dbPath = path.join(dbDir, 'wishlist.db');
-
-// Ensure data directory exists
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
-}
-
-const db = new Database(dbPath);
-
-// Initialize database schema
-db.exec(`
-  CREATE TABLE IF NOT EXISTS wishlist_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    link TEXT NOT NULL,
-    notes TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
+import { sql } from '@vercel/postgres';
 
 export interface WishlistItem {
   id: number;
@@ -36,42 +13,88 @@ export interface NewWishlistItem {
   notes?: string;
 }
 
-export const getAll = (): WishlistItem[] => {
-  const stmt = db.prepare('SELECT * FROM wishlist_items ORDER BY created_at DESC');
-  return stmt.all() as WishlistItem[];
+// Initialize database table
+export async function initializeDatabase() {
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS wishlist_items (
+        id SERIAL PRIMARY KEY,
+        link TEXT NOT NULL,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+  } catch (error) {
+    console.error('Error initializing database:', error);
+  }
+}
+
+export const getAll = async (): Promise<WishlistItem[]> => {
+  try {
+    await initializeDatabase();
+    const { rows } = await sql`SELECT * FROM wishlist_items ORDER BY created_at DESC`;
+    return rows as WishlistItem[];
+  } catch (error) {
+    console.error('Error in getAll:', error);
+    return [];
+  }
 };
 
-export const getById = (id: number): WishlistItem | undefined => {
-  const stmt = db.prepare('SELECT * FROM wishlist_items WHERE id = ?');
-  return stmt.get(id) as WishlistItem | undefined;
+export const getById = async (id: number): Promise<WishlistItem | undefined> => {
+  try {
+    const { rows } = await sql`SELECT * FROM wishlist_items WHERE id = ${id}`;
+    return rows[0] as WishlistItem | undefined;
+  } catch (error) {
+    console.error('Error in getById:', error);
+    return undefined;
+  }
 };
 
-export const create = (item: NewWishlistItem): WishlistItem => {
-  const stmt = db.prepare('INSERT INTO wishlist_items (link, notes) VALUES (?, ?)');
-  const result = stmt.run(item.link, item.notes || null);
-  return getById(result.lastInsertRowid as number)!;
+export const create = async (item: NewWishlistItem): Promise<WishlistItem> => {
+  try {
+    await initializeDatabase();
+    const { rows } = await sql`
+      INSERT INTO wishlist_items (link, notes)
+      VALUES (${item.link}, ${item.notes || null})
+      RETURNING *
+    `;
+    return rows[0] as WishlistItem;
+  } catch (error) {
+    console.error('Error in create:', error);
+    throw error;
+  }
 };
 
-export const update = (id: number, item: Partial<NewWishlistItem>): WishlistItem | undefined => {
-  const existing = getById(id);
-  if (!existing) return undefined;
+export const update = async (
+  id: number,
+  item: Partial<NewWishlistItem>
+): Promise<WishlistItem | undefined> => {
+  try {
+    const existing = await getById(id);
+    if (!existing) return undefined;
 
-  const stmt = db.prepare(
-    'UPDATE wishlist_items SET link = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-  );
-  stmt.run(
-    item.link !== undefined ? item.link : existing.link,
-    item.notes !== undefined ? item.notes : existing.notes,
-    id
-  );
-  return getById(id);
+    const { rows } = await sql`
+      UPDATE wishlist_items
+      SET link = ${item.link !== undefined ? item.link : existing.link},
+          notes = ${item.notes !== undefined ? item.notes : existing.notes},
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    return rows[0] as WishlistItem | undefined;
+  } catch (error) {
+    console.error('Error in update:', error);
+    return undefined;
+  }
 };
 
-export const remove = (id: number): boolean => {
-  const stmt = db.prepare('DELETE FROM wishlist_items WHERE id = ?');
-  const result = stmt.run(id);
-  return result.changes > 0;
+export const remove = async (id: number): Promise<boolean> => {
+  try {
+    const result = await sql`DELETE FROM wishlist_items WHERE id = ${id}`;
+    return result.rowCount > 0;
+  } catch (error) {
+    console.error('Error in remove:', error);
+    return false;
+  }
 };
-
-export default db;
-
